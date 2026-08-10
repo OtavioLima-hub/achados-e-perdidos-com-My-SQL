@@ -1,0 +1,36 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:80"
+    volumes:
+      - ./app:/var/www/html
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+      - MONGO_DB=unifind_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - mongodb
+      - redis
+
+  mongodb:
+    image: mongo:7.0
+    container_name: unifind_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./mongodb:/docker-entrypoint-initdb.d
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: unifind_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  mongo_data:
+  redis_data:

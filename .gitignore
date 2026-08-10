@@ -1,0 +1,15 @@
+# Ignorar arquivos do ambiente e dados locais
+.env
+*.log
+
+# Ignorar dados dos containers Docker
+mongo_data/
+redis_data/
+
+# Ignorar dependencias PHP Composer se houver
+/vendor/
+
+# Ignorar arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini

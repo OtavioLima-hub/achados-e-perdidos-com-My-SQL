@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apresentação: UniFind - MongoDB & Redis</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #090d16;
+            color: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+
+        .slide-deck {
+            width: 100%;
+            max-width: 1000px;
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+        }
+
+        .slide {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 3rem;
+            min-height: 560px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+            page-break-after: always;
+        }
+
+        .slide::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #6366f1, #06b6d4, #10b981);
+        }
+
+        .slide-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .slide-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .slide-number {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #06b6d4;
+        }
+
+        .slide-body {
+            flex: 1;
+            font-size: 1.05rem;
+            line-height: 1.7;
+            color: #cbd5e1;
+        }
+
+        .slide-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1rem;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #6366f1;
+            margin-bottom: 0.75rem;
+        }
+
+        code {
+            background: rgba(0, 0, 0, 0.4);
+            color: #38bdf8;
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        ul { padding-left: 1.2rem; }
+        li { margin-bottom: 0.5rem; }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+        .badge-mongo { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-redis { background: rgba(244, 63, 94, 0.2); color: #fb7185; }
+
+        @media print {
+            body { background: white; color: black; padding: 0; }
+            .slide { border: none; box-shadow: none; min-height: 100vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="slide-deck">
+
+        <!-- SLIDE 1: Capa -->
+        <div class="slide">
+            <div style="margin: auto; text-align: center;">
+                <div style="background: linear-gradient(135deg, #6366f1, #06b6d4); width: 80px; height: 80px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: 800; margin: 0 auto 1.5rem auto; color: white;">UF</div>
+                <h1 style="font-family: 'Outfit'; font-size: 3rem; font-weight: 800; margin-bottom: 0.5rem;">UniFind - Achados e Perdidos</h1>
+                <p style="font-size: 1.25rem; color: #94a3b8; margin-bottom: 2rem;">Modelagem Prática e Integração Sinérgica NoSQL: MongoDB & Redis</p>
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    <span class="badge badge-mongo">MongoDB 7.0</span>
+                    <span class="badge badge-redis">Redis 7.2</span>
+                    <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #818cf8;">PHP 8.2 Web App</span>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Disciplina: Bancos de Dados NoSQL</span>
+                <span>Apresentação Prática</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 2: Cenário & Delimitação -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">1. Delimitação do Cenário & Problema</h2>
+                <span class="slide-number">Slide 2 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title">📌 O Problema do Campus</div>
+                        <ul>
+                            <li>Descentralização e perda de pertences pessoais (notebooks, carteiras, documentos, chaves).</li>
+                            <li>Dificuldade de acompanhamento de status por alunos e servidores.</li>
+                            <li>Lentidão no atendimento presencial dos postos de guarda.</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">🎯 Recorte & Solução Proposta</div>
+                        <ul>
+                            <li>Plataforma centralizada integrando postos físicos de atendimento.</li>
+                            <li>Notificação de reivindicações e histórico transparente.</li>
+                            <li>Leituras ultra-rápidas em memória para consultas repetitivas de busca.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>UniFind NoSQL</span>
+                <span>Cenário Universitário</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 3: Arquitetura Sinérgica -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">2. Visão Geral da Arquitetura NoSQL</h2>
+                <span class="slide-number">Slide 3 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card" style="border-left: 4px solid #10b981;">
+                        <div class="card-title" style="color: #34d399;">🍃 MongoDB (Permanência & Estrutura)</div>
+                        <ul>
+                            <li>Cadastro permanente de objetos e histórico de alterações.</li>
+                            <li>Documentos flexíveis com objetos e arrays embutidos.</li>
+                            <li>Consultas ricas, operadores, busca por regex e Aggregations.</li>
+                        </ul>
+                    </div>
+                    <div class="card" style="border-left: 4px solid #f43f5e;">
+                        <div class="card-title" style="color: #fb7185;">⚡ Redis (Velocidade, Cache & Filas)</div>
+                        <ul>
+                            <li>Cache em memória com tempo de expiração (TTL).</li>
+                            <li>Rankings ordenados via Sorted Sets (ZSET).</li>
+                            <li>Fila FIFO de reivindicações (Lists) e controle de usuários online (Sets).</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Responsabilidades Complementares</span>
+                <span>UniFind</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 4: Modelagem MongoDB -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">3. Modelagem do MongoDB (Coleções & Estratégias)</h2>
+                <span class="slide-number">Slide 4 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="card" style="margin-bottom: 1rem;">
+                    <div class="card-title">Coleções Principais: <code>usuarios</code>, <code>locais</code> e <code>itens</code></div>
+                    <p style="font-size: 0.95rem; margin-bottom: 0.5rem;">Combinação de <strong>Documentos Embutidos</strong> e <strong>Referências por ObjectId</strong>:</p>
+                </div>
+                <div class="grid-2">
+                    <div class="card">
+                        <strong style="color: #38bdf8;">📥 Embutidos:</strong>
+                        <ul style="font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li><code>detalhes_item</code>: Cor, marca, série e tags.</li>
+                            <li><code>historico_status</code>: Array de auditoria de estados.</li>
+                            <li><code>reivindicacao</code>: Solicitante e justificativa.</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <strong style="color: #38bdf8;">🔗 Referências:</strong>
+                        <ul style="font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li><code>local_id</code> -> Referência para coleção <code>locais</code>.</li>
+                            <li><code>cadastrado_por_usuario_id</code> -> Ref para <code>usuarios</code>.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Modelagem MongoDB</span>
+                <span>Documentos & Referências</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 5: Consultas e Aggregation -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">4. Consultas & Aggregation Pipeline</h2>
+                <span class="slide-number">Slide 5 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="card" style="margin-bottom: 1rem;">
+                    <div class="card-title">4 Consultas com Filtros Relevantes:</div>
+                    <ul style="font-size: 0.85rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                        <li>1. Comparação: <code>$gte / $lte</code> (Valores R$ 200 a R$ 4000)</li>
+                        <li>2. Conjunto: <code>$in</code> (Categorias "Chaves" / "Documentos")</li>
+                        <li>3. Regex: <code>$regex</code> (Busca por marca/título)</li>
+                        <li>4. Embutido: <code>reivindicao.status_reivindicacao</code></li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <div class="card-title">Aggregation Pipeline (4 Estágios):</div>
+                    <p style="font-size: 0.85rem;">
+                        <code>$match</code> (Filtra ativos) ➡️ <code>$group</code> (Agrupa por categoria, soma totais e valor médio) ➡️ <code>$sort</code> (Ordena por volume) ➡️ <code>$project</code> (Formata arredondamento)
+                    </p>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>MongoDB Querying</span>
+                <span>Aggregation Pipeline</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 6: Índice e Performance -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">5. Índice no MongoDB & Ganho de Performance</h2>
+                <span class="slide-number">Slide 6 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="card" style="margin-bottom: 1rem;">
+                    <div class="card-title">Índice Composto Criado:</div>
+                    <code>db.itens.createIndex({ status: 1, categoria: 1, data_registro: -1 })</code>
+                </div>
+                <div class="grid-2">
+                    <div class="card">
+                        <strong style="color: #fb7185;">Sem o Índice (COLLSCAN):</strong>
+                        <p style="font-size: 0.85rem; margin-top: 0.5rem;">Varre todos os documentos da coleção e realiza ordenação em memória (In-Memory Sort), consumindo CPU e I/O elevados em grande escala.</p>
+                    </div>
+                    <div class="card">
+                        <strong style="color: #34d399;">Com o Índice (IXSCAN):</strong>
+                        <p style="font-size: 0.85rem; margin-top: 0.5rem;">Busca direta na árvore B-Tree com resultados já pré-ordenados pela data de registro, reduzindo o tempo de resposta a milissegundos.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Indexação MongoDB</span>
+                <span>Optimized IXSCAN</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 7: Estruturas Redis -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">6. Estruturas & Padrão de Chaves no Redis</h2>
+                <span class="slide-number">Slide 7 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div style="font-size: 0.9rem;" class="card">
+                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <th style="padding: 0.5rem;">Estrutura</th>
+                            <th style="padding: 0.5rem;">Padrão da Chave</th>
+                            <th style="padding: 0.5rem;">Uso no Cenário</th>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 0.5rem;"><strong>String + TTL</strong></td>
+                            <td style="padding: 0.5rem;"><code>sessao:usuario:{id}</code> / <code>cache:item:{id}</code></td>
+                            <td style="padding: 0.5rem;">Sessão ativa (3600s) e Cache JSON de busca (300s)</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 0.5rem;"><strong>Hash</strong></td>
+                            <td style="padding: 0.5rem;"><code>resumo:item:{id}</code></td>
+                            <td style="padding: 0.5rem;">Resumo ultra-rápido de atributos para exibição</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 0.5rem;"><strong>Sorted Set</strong></td>
+                            <td style="padding: 0.5rem;"><code>ranking:locais_perdas</code></td>
+                            <td style="padding: 0.5rem;">Ranking dos locais do campus com mais perdas</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 0.5rem;"><strong>List</strong></td>
+                            <td style="padding: 0.5rem;"><code>fila:reivindicacoes_pendentes</code></td>
+                            <td style="padding: 0.5rem;">Fila de atendimento FIFO (LPUSH / RPOP)</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 0.5rem;"><strong>Set</strong></td>
+                            <td style="padding: 0.5rem;"><code>online:usuarios</code></td>
+                            <td style="padding: 0.5rem;">Conjunto de usuários online sem duplicatas</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Estruturas Redis</span>
+                <span>Chaves & Datatypes</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 8: Fluxo de Cache -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">7. Fluxo 1: Caching com Cache Miss & Cache Hit</h2>
+                <span class="slide-number">Slide 8 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card" style="border-top: 4px solid #f59e0b;">
+                        <div class="card-title" style="color: #fbbf24;">1. Cache Miss (Primeira Consulta)</div>
+                        <ol style="font-size: 0.85rem; padding-left: 1rem;">
+                            <li>Aplicação executa <code>GET cache:item:104</code> no Redis.</li>
+                            <li>Redis responde <code>(nil)</code>.</li>
+                            <li>Busca efetuada no MongoDB (<code>findOne</code>).</li>
+                            <li>Grava resultado no Redis: <code>SETEX cache:item:104 300 JSON</code>.</li>
+                        </ol>
+                    </div>
+                    <div class="card" style="border-top: 4px solid #10b981;">
+                        <div class="card-title" style="color: #34d399;">2. Cache Hit (Consultas Subsequentes)</div>
+                        <ol style="font-size: 0.85rem; padding-left: 1rem;">
+                            <li>Aplicação executa <code>GET cache:item:104</code> no Redis.</li>
+                            <li>Redis retorna o JSON em sub-milissegundos!</li>
+                            <li>Monitoramento do tempo restante via <code>TTL cache:item:104</code>.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Demonstração de Cache</span>
+                <span>Miss vs Hit</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 9: Segundo Fluxo -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">8. Fluxo 2: Reivindicação, Fila Redis & Invalidação</h2>
+                <span class="slide-number">Slide 9 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="card">
+                    <div class="card-title">Sequência do Segundo Fluxo Integrado:</div>
+                    <ol style="font-size: 0.9rem; padding-left: 1.2rem; line-height: 1.8;">
+                        <li><strong>Reivindicação enviada pelo usuário:</strong> MongoDB atualiza o status do item e embutido de solicitação.</li>
+                        <li><strong>Inserção na Fila Redis:</strong> ID do item é adicionado na List <code>fila:reivindicacoes_pendentes</code> (<code>LPUSH</code>).</li>
+                        <li><strong>Atualização no Hash:</strong> Hash <code>resumo:item:{id}</code> é atualizado no Redis.</li>
+                        <li><strong>Invalidação de Cache:</strong> Comando <code>DEL cache:item:{id}</code> remove o cache obsoleto.</li>
+                        <li><strong>Processamento Admin:</strong> Administrador desativa a solicitação da fila via <code>RPOP</code>.</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>Fluxo Conjunto 2</span>
+                <span>Fila & Invalidação</span>
+            </div>
+        </div>
+
+        <!-- SLIDE 10: Protótipo Web & Conclusão -->
+        <div class="slide">
+            <div class="slide-header">
+                <h2 class="slide-title">9. Protótipo Web PHP (+8 Pontos) & Conclusão</h2>
+                <span class="slide-number">Slide 10 / 10</span>
+            </div>
+            <div class="slide-body">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="card-title">🌐 Protótipo Web Funcional</div>
+                        <ul style="font-size: 0.85rem;">
+                            <li>Desenvolvido em PHP 8.2 com Docker Compose.</li>
+                            <li>Painel interativo com badges visuais de **CACHE MISS** e **CACHE HIT**.</li>
+                            <li>Gestão em tempo real do Sorted Set (Rankings) e Fila (List).</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">💡 Conclusões</div>
+                        <ul style="font-size: 0.85rem;">
+                            <li>O MongoDB garante consistência e flexibilidade para documentos complexos.</li>
+                            <li>O Redis reduz drasticamente a latência e suporta filas/rankings eficientes.</li>
+                            <li>A integração sinérgica dos dois bancos responde perfeitamente ao cenário.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="slide-footer">
+                <span>UniFind - Achados e Perdidos</span>
+                <span>Obrigado!</span>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

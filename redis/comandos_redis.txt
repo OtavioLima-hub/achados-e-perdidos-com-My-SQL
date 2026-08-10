@@ -1,0 +1,99 @@
+# =============================================================================
+# TRABALHO PRÁTICO BANCO DE DADOS NoSQL - MONGODB & REDIS
+# Cenário: UniFind - Sistema de Achados e Perdidos Campus Universitário
+# Arquivo: Comandos e Operações do Redis (redis/comandos_redis.txt)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# ESTRUTURA E PADRÃO DE NOMENCLATURA DAS CHAVES REDIS:
+# 1. String com TTL:  sessao:usuario:{id} | cache:item:{id}
+# 2. Hash:           resumo:item:{id}
+# 3. Sorted Set:     ranking:locais_perdas | ranking:categorias
+# 4. List:           fila:reivindicacoes_pendentes
+# 5. Set:            online:usuarios
+# -----------------------------------------------------------------------------
+
+# =============================================================================
+# REQUISITO 4.1: STRING COM TTL (Sessão & Cache)
+# =============================================================================
+# Criar sessão de usuário com TTL de 3600 segundos (1 hora)
+SETEX sessao:usuario:65c100000000000000000002 3600 "token_jwt_xyz9988_aluno_ana"
+TTL sessao:usuario:65c100000000000000000002
+GET sessao:usuario:65c100000000000000000002
+
+# =============================================================================
+# REQUISITO 4.2: HASH (Resumo Rápido de Entidade)
+# =============================================================================
+# Armazenar o resumo de um item para exibição ultra-rápida no painel sem consultar o Mongo
+HSET resumo:item:65c300000000000000000101 titulo "Notebook Dell Inspiron 15 Prata" categoria "Eletrônicos" status "encontrado" local "Biblioteca Central" valor "3500.00"
+HGETALL resumo:item:65c300000000000000000101
+HGET resumo:item:65c300000000000000000101 status
+
+# =============================================================================
+# REQUISITO 4.3: SORTED SET (Ranking por Pontuação)
+# =============================================================================
+# Ranking dos locais do campus com maior incidência de itens perdidos
+ZADD ranking:locais_perdas 12 "Biblioteca Central"
+ZADD ranking:locais_perdas 8 "Restaurante Universitário"
+ZADD ranking:locais_perdas 15 "Bloco A (Engenharias)"
+ZADD ranking:locais_perdas 5 "Centro Esportivo / Ginásio"
+ZADD ranking:locais_perdas 3 "Guarita Principal"
+
+# Incrementar contagem quando um novo item é encontrado no Bloco A
+ZINCRBY ranking:locais_perdas 1 "Bloco A (Engenharias)"
+
+# Consultar o Top 3 locais com mais perdas (ordem decrescente de pontuação)
+ZREVRANGE ranking:locais_perdas 0 2 WITHSCORES
+
+# =============================================================================
+# REQUISITO 4.4: LIST E SET (Fila de Atendimento e Usuários Online)
+# =============================================================================
+# LIST: Fila FIFO de reivindicações de objetos aguardando conferência do admin
+LPUSH fila:reivindicacoes_pendentes "65c300000000000000000102"
+LPUSH fila:reivindicacoes_pendentes "65c300000000000000000109"
+
+# Visualizar todos os elementos da fila sem remover
+LRANGE fila:reivindicacoes_pendentes 0 -1
+
+# Processar a reivindicação mais antiga da fila (Desenfileirar LIFO/FIFO)
+RPOP fila:reivindicacoes_pendentes
+
+# SET: Conjunto de IDs de usuários com acesso ativo no momento
+SADD online:usuarios "65c100000000000000000001"
+SADD online:usuarios "65c100000000000000000002"
+SADD online:usuarios "65c100000000000000000003"
+
+# Verificar se usuário está online
+SISMEMBER online:usuarios "65c100000000000000000002"
+SMEMBERS online:usuarios
+
+# =============================================================================
+# REQUISITO 5.1: FLUXO OBRIGATÓRIO DE CACHE (DEMONSTRAÇÃO MANUAL PASSO A PASSO)
+# =============================================================================
+# PASSO 1: Consultar a chave no Redis (espera-se nil / Cache Miss)
+GET cache:item:65c300000000000000000104
+
+# PASSO 2: Como retornou nil (Cache Miss), a aplicação busca a informação no MongoDB:
+# db.itens.findOne({ _id: ObjectId("65c300000000000000000104") })
+
+# PASSO 3: Gravar o resultado no Redis em formato JSON com TTL de 300 segundos (5 minutos)
+SETEX cache:item:65c300000000000000000104 300 "{\"id\":\"65c300000000000000000104\",\"titulo\":\"Fone de Ouvido Sony WH-1000XM4 Preto\",\"categoria\":\"Eletrônicos\",\"status\":\"encontrado\",\"valor_estimado\":1800.00,\"local\":\"Biblioteca Central\"}"
+
+# PASSO 4: Consultar novamente a chave no Redis (espera-se o JSON / Cache Hit)
+GET cache:item:65c300000000000000000104
+
+# PASSO 5: Verificar o tempo restante de expiração do cache
+TTL cache:item:65c300000000000000000104
+
+# =============================================================================
+# REQUISITO 5.2: SEGUNDO FLUXO CONJUNTO (REIVINDICAÇÃO, FILA E INVALIDAÇÃO)
+# =============================================================================
+# 1. Usuário envia solicitação de reivindicação no protótipo web PHP.
+# 2. O MongoDB persiste a solicitação atualizando a sub-coleção do item:
+#    db.itens.updateOne({ _id: ObjectId("...") }, { $set: { status: "reivindicado" } })
+# 3. Simultaneamente, a aplicação insere a solicitação na fila do Redis:
+LPUSH fila:reivindicacoes_pendentes "65c300000000000000000104"
+# 4. Atualiza o resumo rápido no Hash do Redis:
+HSET resumo:item:65c300000000000000000104 status "reivindicado"
+# 5. Invalidação de Cache: Apaga o cache obsoleto da consulta para forçar atualização no próximo acesso
+DEL cache:item:65c300000000000000000104
