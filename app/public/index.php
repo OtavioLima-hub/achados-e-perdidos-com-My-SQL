@@ -203,7 +203,7 @@ if ($redis) {
                                 <div>
                                     <div class="item-category"><?= htmlspecialchars($item['categoria'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></div>
                                     <h3 class="item-title"><?= htmlspecialchars($item['titulo'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></h3>
-                                    <p class="item-desc"><?= htmlspecialchars(substr($item['descricao'], 0, 95), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>...</p>
+                                    <p class="item-desc"><?= htmlspecialchars(mb_substr($item['descricao'], 0, 95, 'UTF-8'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>...</p>
                                 </div>
                                 <div>
                                     <div class="item-meta">

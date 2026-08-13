@@ -4,7 +4,7 @@
 // Arquivo 02: Operações, Consultas, Aggregation Pipeline e Índices (02_operacoes.js)
 // =============================================================================
 
-use unifind_db;
+db = db.getSiblingDB("unifind_db");
 
 print("=====================================================================");
 print("1. DEMONSTRAÇÃO DE OPERAÇÕES CRUD BÁSICAS");
