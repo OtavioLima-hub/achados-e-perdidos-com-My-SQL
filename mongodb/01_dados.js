@@ -4,7 +4,7 @@
 // Arquivo 01: Inserção Inicial de Dados (01_dados.js)
 // =============================================================================
 
-use unifind_db;
+db = db.getSiblingDB("unifind_db");
 
 // Limpeza inicial de coleções para garantia de reprodutibilidade
 db.usuarios.drop();

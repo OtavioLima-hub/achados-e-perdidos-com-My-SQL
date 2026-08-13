@@ -91,8 +91,9 @@ trabalho-backend/
 3. Acesse a aplicação no navegador:
    👉 **http://localhost:8000**
 
-4. Para popular os dados no MongoDB (PowerShell):
-   ```powershell
-   Get-Content mongodb/01_dados.js | docker exec -i unifind_mongodb mongosh
-   Get-Content mongodb/02_operacoes.js | docker exec -i unifind_mongodb mongosh
+4. Para popular os dados no MongoDB:
+   ```bash
+   docker exec unifind_mongodb mongosh /docker-entrypoint-initdb.d/01_dados.js
+   docker exec unifind_mongodb mongosh /docker-entrypoint-initdb.d/02_operacoes.js
    ```
+
