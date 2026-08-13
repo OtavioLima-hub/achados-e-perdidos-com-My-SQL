@@ -1,7 +1,5 @@
 <?php
-// =============================================================================
-// ACHADOS E PERDIDOS IFMG - SISTEMA DE LOGIN (LOGIN.PHP)
-// =============================================================================
+
 header('Content-Type: text/html; charset=UTF-8');
 session_start();
 require_once __DIR__ . '/../config/db.php';
