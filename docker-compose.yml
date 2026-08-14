@@ -6,22 +6,39 @@ services:
     volumes:
       - ./app:/var/www/html
     environment:
-      - MONGO_URI=mongodb://mongodb:27017
-      - MONGO_DB=unifind_db
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=unifind_db
+      - DB_USER=unifind_user
+      - DB_PASSWORD=unifind_pass
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
-      - mongodb
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
-  mongodb:
-    image: mongo:7.0
-    container_name: unifind_mongodb
+  mysql:
+    image: mysql:8.0
+    container_name: unifind_mysql
+    restart: always
     ports:
-      - "27017:27017"
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=unifind_db
+      - MYSQL_USER=unifind_user
+      - MYSQL_PASSWORD=unifind_pass
     volumes:
-      - mongo_data:/data/db
-      - ./mongodb:/docker-entrypoint-initdb.d
+      - mysql_data:/var/lib/mysql
+      - ./mysql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7.2-alpine
@@ -32,5 +49,5 @@ services:
       - redis_data:/data
 
 volumes:
-  mongo_data:
+  mysql_data:
   redis_data:

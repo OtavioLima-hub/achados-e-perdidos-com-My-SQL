@@ -9,13 +9,13 @@ require_once __DIR__ . '/../config/db.php';
 $redis = Database::getRedis();
 
 // Captura filtros da URL
-$searchQuery = $_GET['q'] ?? '';
-$categoriaFilter = $_GET['categoria'] ?? '';
+$searchQuery = trim($_GET['q'] ?? '');
+$categoriaFilter = trim($_GET['categoria'] ?? '');
 
 $cacheKey = "";
 $itemsList = [];
 
-// Registra usuario logado no Redis (SET)
+// Registra usuario logado no Redis (SET) se Redis estiver disponível
 if ($redis && isset($_SESSION['user_name'])) {
     try {
         $redis->sAdd("online:usuarios", $_SESSION['user_name'] . " (" . ($_SESSION['user_tipo'] ?? 'estudante') . ")");
@@ -23,7 +23,7 @@ if ($redis && isset($_SESSION['user_name'])) {
 }
 
 // -----------------------------------------------------------------------------
-// CONSULTA DE ITENS
+// CONSULTA DE ITENS COM MYSQL (E CACHE REDIS SE ATIVO)
 // -----------------------------------------------------------------------------
 if (!empty($searchQuery) || !empty($categoriaFilter)) {
     $cacheKey = "cache:busca:" . md5($searchQuery . "|" . $categoriaFilter);
@@ -32,30 +32,43 @@ if (!empty($searchQuery) || !empty($categoriaFilter)) {
         $cachedData = json_decode($redis->get($cacheKey), true);
         $itemsList = $cachedData ?? [];
     } else {
-        $filter = ['desativado' => false];
+        $where = ["i.desativado = 0"];
+        $params = [];
+        
         if (!empty($categoriaFilter)) {
-            $filter['categoria'] = $categoriaFilter;
+            $where[] = "i.categoria = :categoria";
+            $params[':categoria'] = $categoriaFilter;
         }
         if (!empty($searchQuery)) {
-            $filter['$or'] = [
-                ['titulo' => new MongoDB\BSON\Regex($searchQuery, 'i')],
-                ['descricao' => new MongoDB\BSON\Regex($searchQuery, 'i')]
-            ];
+            $where[] = "(i.titulo LIKE :q1 OR i.descricao LIKE :q2 OR i.cor LIKE :q3 OR i.marca LIKE :q4 OR i.tags LIKE :q5)";
+            $params[':q1'] = "%{$searchQuery}%";
+            $params[':q2'] = "%{$searchQuery}%";
+            $params[':q3'] = "%{$searchQuery}%";
+            $params[':q4'] = "%{$searchQuery}%";
+            $params[':q5'] = "%{$searchQuery}%";
         }
         
-        $options = ['sort' => ['data_registro' => -1]];
-        $rawDocs = getMongoCollection('itens', $filter, $options);
+        $whereSql = implode(' AND ', $where);
+        $sql = "SELECT i.*, l.nome AS local_nome 
+                FROM itens i 
+                LEFT JOIN locais l ON i.local_id = l.id 
+                WHERE {$whereSql} 
+                ORDER BY i.data_registro DESC 
+                LIMIT 24";
+        
+        $rawRows = dbFetchAll($sql, $params);
         
         $itemsList = [];
-        foreach ($rawDocs as $doc) {
+        foreach ($rawRows as $row) {
             $itemsList[] = [
-                'id' => (string)$doc->_id,
-                'titulo' => $doc->titulo ?? '',
-                'descricao' => $doc->descricao ?? '',
-                'categoria' => $doc->categoria ?? '',
-                'status' => $doc->status ?? 'encontrado',
-                'valor_estimado' => $doc->valor_estimado ?? 0,
-                'data_registro' => isset($doc->data_registro) ? date('d/m/Y H:i', $doc->data_registro->toDateTime()->getTimestamp()) : 'Recente'
+                'id' => (string)$row['id'],
+                'titulo' => $row['titulo'] ?? '',
+                'descricao' => $row['descricao'] ?? '',
+                'categoria' => $row['categoria'] ?? '',
+                'status' => $row['status'] ?? 'encontrado',
+                'valor_estimado' => (float)($row['valor_estimado'] ?? 0),
+                'local_nome' => $row['local_nome'] ?? 'Campus IFMG',
+                'data_registro' => !empty($row['data_registro']) ? date('d/m/Y H:i', strtotime($row['data_registro'])) : 'Recente'
             ];
         }
         
@@ -67,28 +80,35 @@ if (!empty($searchQuery) || !empty($categoriaFilter)) {
     }
 } else {
     // Listagem geral
-    $filter = ['desativado' => false];
-    $options = ['sort' => ['data_registro' => -1], 'limit' => 12];
-    $rawDocs = getMongoCollection('itens', $filter, $options);
+    $sql = "SELECT i.*, l.nome AS local_nome 
+            FROM itens i 
+            LEFT JOIN locais l ON i.local_id = l.id 
+            WHERE i.desativado = 0 
+            ORDER BY i.data_registro DESC 
+            LIMIT 12";
     
-    foreach ($rawDocs as $doc) {
+    $rawRows = dbFetchAll($sql);
+    
+    foreach ($rawRows as $row) {
         $itemsList[] = [
-            'id' => (string)$doc->_id,
-            'titulo' => $doc->titulo ?? '',
-            'descricao' => $doc->descricao ?? '',
-            'categoria' => $doc->categoria ?? '',
-            'status' => $doc->status ?? 'encontrado',
-            'valor_estimado' => $doc->valor_estimado ?? 0,
-            'data_registro' => isset($doc->data_registro) ? date('d/m/Y H:i', $doc->data_registro->toDateTime()->getTimestamp()) : 'Recente'
+            'id' => (string)$row['id'],
+            'titulo' => $row['titulo'] ?? '',
+            'descricao' => $row['descricao'] ?? '',
+            'categoria' => $row['categoria'] ?? '',
+            'status' => $row['status'] ?? 'encontrado',
+            'valor_estimado' => (float)($row['valor_estimado'] ?? 0),
+            'local_nome' => $row['local_nome'] ?? 'Campus IFMG',
+            'data_registro' => !empty($row['data_registro']) ? date('d/m/Y H:i', strtotime($row['data_registro'])) : 'Recente'
         ];
     }
 }
 
-// Total de itens zerado se nao houver registros no banco
-$totalItensCadastrados = count($itemsList);
+// Total de itens ativos no MySQL
+$countRow = dbFetchOne("SELECT COUNT(*) as total FROM itens WHERE desativado = 0");
+$totalItensCadastrados = (int)($countRow['total'] ?? count($itemsList));
 
 // -----------------------------------------------------------------------------
-// METRICAS DO REDIS
+// METRICAS DO REDIS (COM FALLBACK MYSQL SE REDIS ESTIVER OFFLINE)
 // -----------------------------------------------------------------------------
 $rankingLocais = [];
 $totalFila = 0;
@@ -101,13 +121,33 @@ if ($redis) {
         $totalOnline = $redis->sCard("online:usuarios");
     } catch (Exception $e) {}
 }
+
+// Fallback caso Redis não tenha ranking ou esteja sem dados: carrega dos locais com mais itens
+if (empty($rankingLocais)) {
+    $locaisStats = dbFetchAll("SELECT l.nome, COUNT(i.id) as total 
+                              FROM locais l 
+                              JOIN itens i ON i.local_id = l.id 
+                              WHERE i.desativado = 0 
+                              GROUP BY l.id, l.nome 
+                              ORDER BY total DESC 
+                              LIMIT 5");
+    foreach ($locaisStats as $l) {
+        $rankingLocais[$l['nome']] = (int)$l['total'];
+    }
+}
+
+// Fallback de contagem da fila caso Redis não esteja com ela populada
+if ($totalFila === 0) {
+    $filaRow = dbFetchOne("SELECT COUNT(*) as total FROM reivindicacoes WHERE status_reivindicacao = 'pendente_aprovacao'");
+    $totalFila = (int)($filaRow['total'] ?? 0);
+}
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Achados e Perdidos IFMG | MongoDB & Redis</title>
+    <title>Achados e Perdidos IFMG | MySQL & Redis</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/public/css/style.css">
@@ -132,6 +172,7 @@ if ($redis) {
                     <option value="Acessórios" <?= $categoriaFilter === 'Acessórios' ? 'selected' : '' ?>>Acessórios</option>
                     <option value="Material Escolar" <?= $categoriaFilter === 'Material Escolar' ? 'selected' : '' ?>>Material Escolar</option>
                     <option value="Chaves" <?= $categoriaFilter === 'Chaves' ? 'selected' : '' ?>>Chaves</option>
+                    <option value="Vestuário" <?= $categoriaFilter === 'Vestuário' ? 'selected' : '' ?>>Vestuário</option>
                 </select>
                 <button type="submit" class="btn-primary">Buscar</button>
             </form>
@@ -161,32 +202,35 @@ if ($redis) {
         <!-- Hero Section -->
         <section class="hero-section">
             <h1 class="hero-title">Achados e Perdidos IFMG</h1>
+            <p class="hero-desc">
+                Sistema centralizado para cadastro, localização e devolução de pertences perdidos no campus com persistência em <strong>MySQL</strong> e aceleração em tempo real.
+            </p>
         </section>
 
-        <!-- Stats Grid sem Status do Cache -->
+        <!-- Stats Grid -->
         <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
             <div class="stat-card">
                 <div class="stat-header">
                     <span class="stat-label">Itens Cadastrados</span>
                 </div>
                 <div class="stat-value"><?= $totalItensCadastrados ?></div>
-                <div class="stat-explanation">Total de objetos ativos registrados no banco de dados MongoDB.</div>
+                <div class="stat-explanation">Total de objetos ativos registrados no banco de dados relacional MySQL.</div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-header">
-                    <span class="stat-label">Fila de Atendimento (Redis)</span>
+                    <span class="stat-label">Fila de Atendimento</span>
                 </div>
                 <div class="stat-value"><?= $totalFila ?></div>
-                <div class="stat-explanation">O que é: Estrutura do tipo List no Redis onde as solicitações de devolução entram na ordem de chegada (FIFO) para validação do administrador.</div>
+                <div class="stat-explanation">Solicitações de devolução aguardando validação e entrega pelo administrador.</div>
             </div>
 
             <div class="stat-card">
                 <div class="stat-header">
-                    <span class="stat-label">Usuários Online:</span>
+                    <span class="stat-label">Usuários Ativos / Online:</span>
                 </div>
-                <div class="stat-value"><?= $totalOnline ?></div>
-                <div class="stat-explanation">Controle em tempo real de conexões ativas mantidas no conjunto Set do Redis.</div>
+                <div class="stat-value"><?= $totalOnline > 0 ? $totalOnline : '1' ?></div>
+                <div class="stat-explanation">Controle de conexões e sessões de usuários ativas no sistema.</div>
             </div>
         </div>
 
@@ -218,20 +262,20 @@ if ($redis) {
                         <?php endforeach; ?>
                     <?php else: ?>
                         <div style="grid-column: 1 / -1; background: var(--bg-card); padding: 3rem; border-radius: 16px; text-align: center; color: var(--text-muted); border: 1px solid var(--border-glass);">
-                            Nenhum objeto encontrado no momento. Execute o script do MongoDB para popular os dados.
+                            Nenhum objeto encontrado no momento com os critérios selecionados.
                         </div>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <!-- Sidebar: Redis Sorted Set Ranking com Explicacao -->
+            <!-- Sidebar: Ranking por Local -->
             <div>
                 <div class="sidebar-panel">
                     <h3 class="panel-title">Ranking de Perdas por Local</h3>
                     
                     <div class="panel-explanation">
-                        <strong>O que é o Ranking?</strong><br>
-                        Estrutura Sorted Set (ZSET) no Redis sob a chave <code>ranking:locais_perdas</code>. Contabiliza e ordena dinamicamente em tempo real os locais do campus com maior incidência de objetos encontrados.
+                        <strong>Estatística do Campus</strong><br>
+                        Contabiliza e ordena em tempo real os locais do campus com maior incidência de objetos encontrados.
                     </div>
 
                     <ul class="ranking-list">
@@ -247,7 +291,7 @@ if ($redis) {
                             <?php endforeach; ?>
                         <?php else: ?>
                             <li style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem 0;">
-                                Execute o script do MongoDB/Redis para visualizar a pontuação do ranking.
+                                Nenhum local registrado com perdas até o momento.
                             </li>
                         <?php endif; ?>
                     </ul>

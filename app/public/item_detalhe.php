@@ -6,8 +6,8 @@ header('Content-Type: text/html; charset=UTF-8');
 session_start();
 require_once __DIR__ . '/../config/db.php';
 
-$itemId = $_GET['id'] ?? '';
-if (empty($itemId)) {
+$itemId = (int)($_GET['id'] ?? 0);
+if ($itemId <= 0) {
     header("Location: index.php");
     exit;
 }
@@ -15,65 +15,88 @@ if (empty($itemId)) {
 $redis = Database::getRedis();
 $cacheKey = "cache:item:" . $itemId;
 $itemData = null;
-
-// Processar solicitacao de Reivindicacao (Segundo Fluxo)
 $msgSucesso = '';
+$msgErro = '';
+
+// Processar solicitação de Reivindicação
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_reivindicar'])) {
     $justificativa = trim($_POST['justificativa'] ?? '');
-    $reivindicanteId = $_SESSION['user_id'] ?? '65c100000000000000000002';
+    $reivindicanteId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 2;
+    $userName = $_SESSION['user_name'] ?? 'Estudante';
     
-    updateMongoDocument('itens', ['_id' => new MongoDB\BSON\ObjectId($itemId)], [
-        '$set' => [
-            'status' => 'reivindicado',
-            'reivindicao' => [
-                'usuario_id' => new MongoDB\BSON\ObjectId($reivindicanteId),
-                'data_reivindicacao' => new MongoDB\BSON\UTCDateTime(),
-                'justificativa' => $justificativa,
-                'status_reivindicacao' => 'pendente_aprovacao'
-            ]
-        ],
-        '$push' => [
-            'historico_status' => [
-                'data' => new MongoDB\BSON\UTCDateTime(),
-                'status' => 'reivindicado',
-                'usuario_id' => new MongoDB\BSON\ObjectId($reivindicanteId),
-                'observacao' => 'Solicitação registrada por ' . ($_SESSION['user_name'] ?? 'Usuário') . '.'
-            ]
-        ]
-    ]);
-    
-    if ($redis) {
+    if (!empty($justificativa)) {
         try {
-            $redis->lPush("fila:reivindicacoes_pendentes", $itemId);
-            $redis->hSet("resumo:item:" . $itemId, "status", "reivindicado");
-            $redis->del($cacheKey);
-        } catch (Exception $e) {}
+            // 1. Atualiza o status do item para 'reivindicado'
+            dbUpdate('itens', ['status' => 'reivindicado'], "id = :id", [':id' => $itemId]);
+
+            // 2. Insere a solicitação na tabela de reivindicações
+            dbInsert('reivindicacoes', [
+                'item_id' => $itemId,
+                'usuario_id' => $reivindicanteId,
+                'justificativa' => $justificativa,
+                'status_reivindicacao' => 'pendente_aprovacao',
+                'data_reivindicacao' => date('Y-m-d H:i:s')
+            ]);
+
+            // 3. Registra no histórico do item
+            dbInsert('historico_status', [
+                'item_id' => $itemId,
+                'status' => 'reivindicado',
+                'usuario_id' => $reivindicanteId,
+                'observacao' => "Solicitação de reivindicação registrada por {$userName}.",
+                'data_registro' => date('Y-m-d H:i:s')
+            ]);
+
+            // 4. Integração com Redis (se ativo)
+            if ($redis) {
+                try {
+                    $redis->lPush("fila:reivindicacoes_pendentes", (string)$itemId);
+                    $redis->hSet("resumo:item:" . $itemId, "status", "reivindicado");
+                    $redis->del($cacheKey);
+                } catch (Exception $e) {}
+            }
+
+            $msgSucesso = "Solicitação de reivindicação enviada com sucesso! O item aguarda aprovação na fila de devoluções.";
+        } catch (Exception $e) {
+            $msgErro = "Erro ao processar reivindicação: " . $e->getMessage();
+        }
+    } else {
+        $msgErro = "Por favor, forneça uma justificativa com detalhes comprobatórios.";
     }
-    
-    $msgSucesso = "Solicitação de reivindicação enviada com sucesso. O item foi adicionado à fila do Redis e o cache foi invalidado.";
 }
 
 // -----------------------------------------------------------------------------
-// FLUXO DE CACHE COM REDIS
+// CONSULTA DOS DADOS DO ITEM COM CACHE REDIS OU MYSQL
 // -----------------------------------------------------------------------------
 if ($redis && $redis->exists($cacheKey)) {
     $itemData = json_decode($redis->get($cacheKey), true);
 } else {
-    $rawDoc = getMongoDocumentById('itens', $itemId);
+    $sql = "SELECT i.*, l.nome AS local_nome, l.bloco, l.responsavel, u.nome AS cadastrado_por_nome 
+            FROM itens i 
+            LEFT JOIN locais l ON i.local_id = l.id 
+            LEFT JOIN usuarios u ON i.cadastrado_por_usuario_id = u.id 
+            WHERE i.id = :id";
     
-    if ($rawDoc) {
+    $row = dbFetchOne($sql, [':id' => $itemId]);
+    
+    if ($row) {
         $itemData = [
-            'id' => (string)$rawDoc->_id,
-            'titulo' => $rawDoc->titulo ?? '',
-            'descricao' => $rawDoc->descricao ?? '',
-            'categoria' => $rawDoc->categoria ?? '',
-            'status' => $rawDoc->status ?? 'encontrado',
-            'valor_estimado' => $rawDoc->valor_estimado ?? 0,
-            'cor' => $rawDoc->detalhes_item->cor ?? 'Não Informada',
-            'marca' => $rawDoc->detalhes_item->marca ?? 'Não Informada',
-            'tags' => isset($rawDoc->detalhes_item->tags) ? (array)$rawDoc->detalhes_item->tags : []
+            'id' => (string)$row['id'],
+            'titulo' => $row['titulo'] ?? '',
+            'descricao' => $row['descricao'] ?? '',
+            'categoria' => $row['categoria'] ?? '',
+            'status' => $row['status'] ?? 'encontrado',
+            'valor_estimado' => (float)($row['valor_estimado'] ?? 0),
+            'cor' => !empty($row['cor']) ? $row['cor'] : 'Não Informada',
+            'marca' => !empty($row['marca']) ? $row['marca'] : 'Não Informada',
+            'numero_serie' => !empty($row['numero_serie']) ? $row['numero_serie'] : 'Não Informado',
+            'tamanho' => !empty($row['tamanho']) ? $row['tamanho'] : null,
+            'local_nome' => $row['local_nome'] ?? 'Campus IFMG',
+            'bloco' => $row['bloco'] ?? '',
+            'cadastrado_por_nome' => $row['cadastrado_por_nome'] ?? 'Servidor do Campus',
+            'data_registro' => !empty($row['data_registro']) ? date('d/m/Y H:i', strtotime($row['data_registro'])) : 'Recente'
         ];
-        
+
         if ($redis) {
             try {
                 $redis->setex($cacheKey, 300, json_encode($itemData));
@@ -83,8 +106,15 @@ if ($redis && $redis->exists($cacheKey)) {
 }
 
 if (!$itemData) {
-    die("Item não encontrado.");
+    die("Item não encontrado no banco de dados MySQL.");
 }
+
+// Buscar histórico de status do item
+$historico = dbFetchAll("SELECT h.*, u.nome AS usuario_nome 
+                         FROM historico_status h 
+                         LEFT JOIN usuarios u ON h.usuario_id = u.id 
+                         WHERE h.item_id = :id 
+                         ORDER BY h.data_registro ASC", [':id' => $itemId]);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -128,6 +158,12 @@ if (!$itemData) {
             </div>
         <?php endif; ?>
 
+        <?php if (!empty($msgErro)): ?>
+            <div class="cache-banner miss" style="margin-bottom: 2rem;">
+                <?= htmlspecialchars($msgErro, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+            </div>
+        <?php endif; ?>
+
         <!-- Main Detail Card -->
         <div class="hero-section">
             <div class="item-category"><?= htmlspecialchars($itemData['categoria'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></div>
@@ -146,6 +182,10 @@ if (!$itemData) {
                     <strong style="font-size: 1.1rem; color: white;">R$ <?= number_format($itemData['valor_estimado'], 2, ',', '.') ?></strong>
                 </div>
                 <div>
+                    <span style="color: var(--text-muted); font-size: 0.85rem;">Local de Guarda:</span><br>
+                    <strong style="color: white;"><?= htmlspecialchars($itemData['local_nome'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
+                </div>
+                <div>
                     <span style="color: var(--text-muted); font-size: 0.85rem;">Marca / Fabricante:</span><br>
                     <strong style="color: white;"><?= htmlspecialchars($itemData['marca'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
                 </div>
@@ -155,12 +195,29 @@ if (!$itemData) {
                 </div>
             </div>
 
+            <!-- Histórico de Status -->
+            <?php if (!empty($historico)): ?>
+                <div style="background: rgba(5, 12, 8, 0.5); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass); margin-bottom: 1.5rem;">
+                    <h3 style="font-family: var(--font-heading); font-size: 1.1rem; color: white; margin-bottom: 0.8rem;">Histórico do Objeto</h3>
+                    <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                        <?php foreach ($historico as $h): ?>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); border-left: 2px solid var(--neon-green); padding-left: 0.8rem;">
+                                <strong style="color: white;"><?= date('d/m/Y H:i', strtotime($h['data_registro'])) ?></strong> - 
+                                <span class="badge-status status-<?= $h['status'] ?>" style="font-size: 0.75rem; padding: 0.15rem 0.4rem;"><?= strtoupper($h['status']) ?></span>: 
+                                <?= htmlspecialchars($h['observacao'] ?? '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+                                <small style="color: var(--text-muted);">(Registrado por: <?= htmlspecialchars($h['usuario_nome'] ?? 'Sistema', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)</small>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <!-- Reivindicar Form -->
             <?php if ($itemData['status'] === 'encontrado'): ?>
                 <div style="background: rgba(5, 12, 8, 0.7); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-glass);">
                     <h3 style="font-family: var(--font-heading); font-size: 1.2rem; margin-bottom: 0.75rem; color: white;">Reivindicar Posse deste Objeto</h3>
                     <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
-                        Esta ação insere a justificativa no MongoDB, adiciona o ID da solicitação na Fila do Redis (<code>fila:reivindicacoes_pendentes</code>) e invalida a chave de cache.
+                        Esta ação insere a justificativa no MySQL, atualiza o status para <strong>reivindicado</strong> e adiciona a solicitação na fila de atendimento para validação.
                     </p>
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <form method="POST">

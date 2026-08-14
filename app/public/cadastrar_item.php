@@ -3,63 +3,88 @@
 // ACHADOS E PERDIDOS IFMG - CADASTRO DE ITEM (CADASTRAR_ITEM.PHP)
 // =============================================================================
 header('Content-Type: text/html; charset=UTF-8');
+session_start();
 require_once __DIR__ . '/../config/db.php';
 
 $redis = Database::getRedis();
 $msgSucesso = '';
+$msgErro = '';
+
+// Carregar locais ativos do MySQL
+$locais = dbFetchAll("SELECT id, nome, bloco FROM locais WHERE ativo = 1 ORDER BY id ASC");
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $titulo = trim($_POST['titulo'] ?? '');
     $descricao = trim($_POST['descricao'] ?? '');
     $categoria = $_POST['categoria'] ?? 'Outros';
     $valorEstimado = (float)($_POST['valor_estimado'] ?? 0);
-    $localNome = $_POST['local_nome'] ?? 'Biblioteca Central';
+    $localId = (int)($_POST['local_id'] ?? 1);
     $cor = trim($_POST['cor'] ?? '');
     $marca = trim($_POST['marca'] ?? '');
     
+    // Obter o ID do usuário cadastrador (da sessão ou usuário padrão)
+    $usuarioId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 1;
+    
     if (!empty($titulo) && !empty($descricao)) {
-        $doc = [
-            'titulo' => $titulo,
-            'descricao' => $descricao,
-            'categoria' => $categoria,
-            'status' => 'encontrado',
-            'valor_estimado' => $valorEstimado,
-            'data_registro' => new MongoDB\BSON\UTCDateTime(),
-            'local_id' => new MongoDB\BSON\ObjectId('65c200000000000000000001'),
-            'cadastrado_por_usuario_id' => new MongoDB\BSON\ObjectId('65c100000000000000000001'),
-            'detalhes_item' => [
-                'cor' => $cor,
-                'marca' => $marca,
-                'tags' => array_filter(explode(',', strtolower($titulo . ',' . $categoria)))
-            ],
-            'historico_status' => [
-                [
-                    'data' => new MongoDB\BSON\UTCDateTime(),
-                    'status' => 'encontrado',
-                    'usuario_id' => new MongoDB\BSON\ObjectId('65c100000000000000000001'),
-                    'observacao' => 'Item cadastrado via formulário web PHP.'
-                ]
-            ],
-            'desativado' => false
-        ];
-        
-        $newId = insertMongoDocument('itens', $doc);
-        $newIdStr = (string)$newId;
-        
-        if ($redis) {
-            try {
-                $redis->zIncrBy("ranking:locais_perdas", 1, $localNome);
-                $redis->hMSet("resumo:item:" . $newIdStr, [
-                    'titulo' => $titulo,
-                    'categoria' => $categoria,
-                    'status' => 'encontrado',
-                    'local' => $localNome,
-                    'valor' => $valorEstimado
-                ]);
-            } catch (Exception $e) {}
+        try {
+            $tags = strtolower(implode(',', array_filter([$titulo, $categoria, $cor, $marca])));
+
+            // Inserir item no MySQL
+            $itemData = [
+                'titulo' => $titulo,
+                'descricao' => $descricao,
+                'categoria' => $categoria,
+                'status' => 'encontrado',
+                'valor_estimado' => $valorEstimado,
+                'local_id' => $localId,
+                'cadastrado_por_usuario_id' => $usuarioId,
+                'cor' => !empty($cor) ? $cor : null,
+                'marca' => !empty($marca) ? $marca : null,
+                'tags' => $tags,
+                'desativado' => 0,
+                'data_registro' => date('Y-m-d H:i:s')
+            ];
+
+            $newId = dbInsert('itens', $itemData);
+
+            // Inserir histórico de status inicial
+            dbInsert('historico_status', [
+                'item_id' => $newId,
+                'status' => 'encontrado',
+                'usuario_id' => $usuarioId,
+                'observacao' => 'Item cadastrado via formulário web PHP no MySQL.',
+                'data_registro' => date('Y-m-d H:i:s')
+            ]);
+
+            // Buscar nome do local para atualização no Redis
+            $localNome = 'Campus IFMG';
+            foreach ($locais as $loc) {
+                if ($loc['id'] == $localId) {
+                    $localNome = $loc['nome'];
+                    break;
+                }
+            }
+
+            // Atualização no Redis se disponível
+            if ($redis) {
+                try {
+                    $redis->zIncrBy("ranking:locais_perdas", 1, $localNome);
+                    $redis->hMSet("resumo:item:" . $newId, [
+                        'titulo' => $titulo,
+                        'categoria' => $categoria,
+                        'status' => 'encontrado',
+                        'local' => $localNome,
+                        'valor' => $valorEstimado
+                    ]);
+                } catch (Exception $e) {}
+            }
+
+            $msgSucesso = "Item #{$newId} - '{$titulo}' cadastrado com sucesso no MySQL!";
+        } catch (Exception $e) {
+            $msgErro = "Erro ao cadastrar item: " . $e->getMessage();
         }
-        
-        $msgSucesso = "Item '{$titulo}' cadastrado com sucesso no MongoDB. Ranking do Redis atualizado.";
+    } else {
+        $msgErro = "Por favor, preencha os campos obrigatórios (Título e Descrição).";
     }
 }
 ?>
@@ -83,6 +108,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </a>
             <ul class="nav-links">
                 <li><a href="index.php" class="nav-link">Voltar ao Catálogo</a></li>
+                <?php if (isset($_SESSION['user_id'])): ?>
+                    <li style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.85rem; color: var(--neon-green); font-weight: 700;">
+                            <?= htmlspecialchars($_SESSION['user_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+                        </span>
+                        <a href="logout.php" class="nav-link" style="color: var(--text-muted); font-size: 0.8rem;">Sair</a>
+                    </li>
+                <?php endif; ?>
             </ul>
         </div>
     </header>
@@ -92,6 +125,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if (!empty($msgSucesso)): ?>
             <div class="cache-banner hit" style="margin-bottom: 2rem;">
                 <?= htmlspecialchars($msgSucesso, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($msgErro)): ?>
+            <div class="cache-banner miss" style="margin-bottom: 2rem;">
+                <?= htmlspecialchars($msgErro, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
             </div>
         <?php endif; ?>
 
@@ -117,13 +156,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </select>
                     </div>
                     <div>
-                        <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem;">Local Encontrado *</label>
-                        <select name="local_nome" class="input-field" style="width: 100%;" required>
-                            <option value="Biblioteca Central">Biblioteca Central</option>
-                            <option value="Bloco A (Engenharias)">Bloco A (Engenharias)</option>
-                            <option value="Restaurante Universitário">Restaurante Universitário</option>
-                            <option value="Centro Esportivo / Ginásio">Centro Esportivo / Ginásio</option>
-                            <option value="Guarita Principal">Guarita Principal</option>
+                        <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem;">Local de Guarda / Encontrado *</label>
+                        <select name="local_id" class="input-field" style="width: 100%;" required>
+                            <?php foreach ($locais as $loc): ?>
+                                <option value="<?= $loc['id'] ?>">
+                                    <?= htmlspecialchars($loc['nome'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                 </div>
@@ -149,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; padding: 0.8rem;">
-                    Cadastrar Objeto
+                    Cadastrar Objeto no MySQL
                 </button>
             </form>
         </div>

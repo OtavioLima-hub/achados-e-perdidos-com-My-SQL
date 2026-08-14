@@ -1,5 +1,7 @@
 <?php
-
+// =============================================================================
+// ACHADOS E PERDIDOS IFMG - LOGIN (LOGIN.PHP)
+// =============================================================================
 header('Content-Type: text/html; charset=UTF-8');
 session_start();
 require_once __DIR__ . '/../config/db.php';
@@ -17,41 +19,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     
     if (!empty($email)) {
-        // Consultar usuario no MongoDB pelo email
-        $userDoc = getMongoCollection('usuarios', ['email' => $email]);
+        // Consultar usuário no MySQL pelo e-mail
+        $user = dbFetchOne("SELECT * FROM usuarios WHERE email = :email AND ativo = 1", [':email' => $email]);
         
-        if (!empty($userDoc)) {
-            $user = $userDoc[0];
-            $userIdStr = (string)$user->_id;
+        if (!empty($user)) {
+            $userIdStr = (string)$user['id'];
             
-            // Gravar sessao no PHP
+            // Gravar sessão no PHP
             $_SESSION['user_id'] = $userIdStr;
-            $_SESSION['user_name'] = $user->nome ?? 'Usuário';
-            $_SESSION['user_email'] = $user->email ?? $email;
-            $_SESSION['user_tipo'] = $user->tipo ?? 'estudante';
+            $_SESSION['user_name'] = $user['nome'] ?? 'Usuário';
+            $_SESSION['user_email'] = $user['email'] ?? $email;
+            $_SESSION['user_tipo'] = $user['tipo'] ?? 'estudante';
             
-            // Gravar sessao no Redis com TTL de 3600 segundos (1 hora)
+            // Gravar sessão no Redis se disponível (TTL: 3600s)
             if ($redis) {
                 try {
                     $tokenSessao = "session_token_" . bin2hex(random_bytes(16));
                     $redis->setex("sessao:usuario:" . $userIdStr, 3600, json_encode([
                         'user_id' => $userIdStr,
-                        'nome' => $user->nome ?? '',
-                        'email' => $user->email ?? '',
-                        'tipo' => $user->tipo ?? '',
+                        'nome' => $user['nome'] ?? '',
+                        'email' => $user['email'] ?? '',
+                        'tipo' => $user['tipo'] ?? '',
                         'token' => $tokenSessao,
                         'login_at' => date('Y-m-d H:i:s')
                     ]));
                     
-                    // Adicionar ao Set de usuarios online
-                    $redis->sAdd("online:usuarios", $user->nome . " (" . $user->tipo . ")");
+                    // Adicionar ao Set de usuários online
+                    $redis->sAdd("online:usuarios", $user['nome'] . " (" . $user['tipo'] . ")");
                 } catch (Exception $e) {}
             }
             
             header("Location: index.php");
             exit;
         } else {
-            $msgErro = "Usuário não encontrado com o e-mail informado.";
+            $msgErro = "Usuário não encontrado ou inativo no cadastro MySQL com o e-mail informado.";
         }
     } else {
         $msgErro = "Por favor, informe o e-mail de acesso.";
@@ -93,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="hero-section">
             <h1 class="hero-title" style="font-size: 1.8rem; margin-bottom: 0.5rem; text-align: center;">Acesso ao Sistema</h1>
             <p style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; margin-bottom: 2rem;">
-                Sessão gerenciada em memória no Redis sob a chave <code>sessao:usuario:{id}</code> (TTL: 3600s).
+                Autenticação com persistência em MySQL e sessão ativa.
             </p>
 
             <form method="POST">

@@ -1,13 +1,14 @@
 FROM php:8.2-apache
 
-# Install dependencies and extensions for MongoDB & Redis
+# Install dependencies and extensions for MySQL (PDO) & Redis
 RUN apt-get update && apt-get install -y \
     libssl-dev \
     pkg-config \
     unzip \
     git \
-    && pecl install mongodb redis \
-    && docker-php-ext-enable mongodb redis \
+    && docker-php-ext-install pdo pdo_mysql mysqli \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
     && a2enmod rewrite
 
 # Configure Apache DocumentRoot to point to /var/www/html/public
