@@ -3,8 +3,19 @@
 -- Script de Inicialização e Criação do Banco Relacional (init.sql)
 -- =============================================================================
 
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS unifind_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE unifind_db;
+
+SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS reivindicacoes;
+DROP TABLE IF EXISTS historico_status;
+DROP TABLE IF EXISTS itens;
+DROP TABLE IF EXISTS locais;
+DROP TABLE IF EXISTS usuarios;
+SET FOREIGN_KEY_CHECKS = 1;
 
 -- -----------------------------------------------------------------------------
 -- 1. TABELA: usuarios

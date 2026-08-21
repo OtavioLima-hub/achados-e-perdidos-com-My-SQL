@@ -23,6 +23,7 @@ services:
     image: mysql:8.0
     container_name: unifind_mysql
     restart: always
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     ports:
       - "3306:3306"
     environment:
