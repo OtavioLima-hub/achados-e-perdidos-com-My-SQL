@@ -8,8 +8,8 @@
     --bg-dark: #050807;
     --bg-space: #09100c;
     --bg-card: rgba(14, 24, 18, 0.75);
-    --bg-card-hover: rgba(22, 38, 28, 0.9);
-    --bg-input: rgba(5, 12, 8, 0.85);
+    --bg-card-hover: rgba(22, 38, 27, 0.9);
+    --bg-input: rgba(5, 12, 8, 0.86);
     
     --border-glass: rgba(16, 185, 129, 0.15);
     --border-glass-hover: rgba(16, 185, 129, 0.5);
@@ -18,7 +18,7 @@
     --primary-light: #10b981;
     --neon-green: #00e676;
     
-    --primary-gradient: linear-gradient(135deg, #059669 0%, #10b981 50%, #00e676 100%);
+    --primary-gradient: linear-gradient(135deg, #059668 0%, #10b981 50%, #00e676 100%);
     --secondary-gradient: linear-gradient(135deg, #047857 0%, #065f46 100%);
     
     --text-primary: #f0fdf4;
@@ -51,7 +51,7 @@
 
 * {
     margin: 0;
-    padding: 0;
+    padding: 0.1;
     box-sizing: border-box;
 }
 

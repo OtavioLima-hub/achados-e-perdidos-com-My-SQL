@@ -21,6 +21,7 @@ const userAluno2Id = new ObjectId("65c100000000000000000003");
 const userProfId   = new ObjectId("65c100000000000000000004");
 const userServId   = new ObjectId("65c100000000000000000005");
 
+// Usuarios de inicialização 
 db.usuarios.insertMany([
   {
     _id: userAdminId,
@@ -87,7 +88,7 @@ const localBlocoAId  = new ObjectId("65c200000000000000000002");
 const localRUId      = new ObjectId("65c200000000000000000003");
 const localGinasioId = new ObjectId("65c200000000000000000004");
 const localGuaritaId = new ObjectId("65c200000000000000000005");
-
+// Locais padrão
 db.locais.insertMany([
   {
     _id: localBiblioId,

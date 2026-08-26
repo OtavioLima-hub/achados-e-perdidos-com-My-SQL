@@ -16,7 +16,7 @@ DROP TABLE IF EXISTS itens;
 DROP TABLE IF EXISTS locais;
 DROP TABLE IF EXISTS usuarios;
 SET FOREIGN_KEY_CHECKS = 1;
-
+-- Povoamento e inicialização do mysql
 -- -----------------------------------------------------------------------------
 -- 1. TABELA: usuarios
 -- -----------------------------------------------------------------------------
